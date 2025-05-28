@@ -1,0 +1,112 @@
+import { DocNode , BlockNode , TextNode , InlineNode } from "./Schema.js";
+export class Style 
+{
+    constructor(marks , marksInherited = {} ) // attribute will be an array of attribute of arrays // marks will be an object or value  
+    {
+        this.marks = marks ;
+        this.Styles = "";
+        this.getStyle(); 
+        this.InheritedStyles = marksInherited ;
+        this.CompleteStyle = {} ; 
+        this.getFullStyle(); 
+    }
+
+
+    getStyle()
+    {
+        var str = "";
+        if(typeof(this.marks) === "object")  
+        {
+            for(let key in this.marks)
+            {
+                str += (key + " : " + this.marks[key] + " ; ")
+            }
+        }
+
+        this.Styles =  str;
+    }
+
+    updateStyles(LKM)
+    {
+        this.InheritedStyles = LKM ;
+        this.CompleteStyle = {} ; 
+        this.getFullStyle(); 
+    }
+
+    getFullStyle()
+    {
+        for(let key in this.marks)
+        {
+            this.CompleteStyle[key] = this.marks[key];
+        }
+
+        for(let key in this.InheritedStyles)
+        {
+            if(!this.CompleteStyle[key])
+            {
+                this.CompleteStyle[key] = this.InheritedStyles[key]
+            }
+        }
+    }
+
+    ChangeStyles(object)
+    {
+        var key = object.key ; 
+        var value = object[key];
+
+        this.marks[key] = value ;  // if new then add it , else change it 
+        this.getStyle(); 
+    }
+
+    DeleteStyle(styleName)
+    {
+        if(this.marks[styleName])
+        {
+            delete this.marks[styleName];
+            this.getStyle() ; 
+        }
+    }
+
+    IsSuitable(object)
+    {
+        var NoMatchCount = 0 ; 
+        for(key in object)
+        {
+            if(object[key] && this.CompleteStyle[key] && (this.CompleteStyle[key] !== object[key]))
+            {
+                NoMatchCount++
+            }
+        }
+
+        if(NoMatchCount > 2) {return false }
+        return true 
+    }
+
+}
+
+
+
+
+// work of the state is same , insert thing as you desire 
+// and do the things that you do not like 
+// now we will have to introduce the keymaps but before let's do some other things 
+
+export class TxtEditor 
+{
+    constructor(Document)
+    {
+        this.Document = Document ; 
+        this.CaretPos = Document.CaretPos ; 
+    }
+    /**        parentId ,
+        type  , // SP for span , EM , UL , ST , // LN for link  we will think about the link later 
+        count ,
+        childArr ,
+        From_abs = 0  , 
+        styles = {}, */
+
+    InsertInlineNode(type , childArr , styles , pos)
+    {
+
+    } 
+}
