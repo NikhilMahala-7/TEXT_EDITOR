@@ -60,7 +60,8 @@ class DocNode
     {
         let finalArr = [] ; 
         if(this.Childs.length === 0) return [] 
-        if(to > this.EvalProps().End_abs){to = this.EvalProps().End_abs}
+        if(to > this.EvalProps().End_abs || to === -1){to = this.EvalProps().End_abs}
+        if(from > this.EvalProps().End_abs){return []}
         for(let i = 0 , pos = this.Childs[0].EvalProps().From_abs ; pos <= to ; i++)
         {
             if (i === this.Childs.length) break ;
@@ -115,7 +116,6 @@ class DocNode
     InsertCut(object)
     {
         this.Childs.splice(object.index , 0 ,object.Node);
-        return {insertedAt : object.index , insertedInto : this}
     }
 
     printTree()
@@ -130,34 +130,6 @@ class DocNode
         })
     }
 
-
-    // insert new Inline or Insert new Text 
-    //This is Bold Text*This is UnderLine Text
-    // now * is point where you wanna ask it so how will you do it ? huh ? either keep track of things in which you wanna move in
-    // think of going back if you at a position x then check for the block with pos x - 1 , for edge cases we will talk 
-    // Now as soon as the whole text content of the InlineNode becomes 0 , do not terminate the it , but we will google docs does not but we will 
-    //Block Node with Length = 0 , does not Exist , remove it 
-    // paragrph node can be empty due to following reasons as we need it for the spacing 
-    // the caret will carry the styles so that even when we move to a new paragraph we do not face issuse like style change and other things 
-    // so the caret will keep track of the styles applied to it and the node styles it has and can exist on the end of the paragraph but it will manage things 
-
-
-
-
-    // we will talk about the insertion in another thing , let's make some commands first 
-    // and yes the logic of the inserting the prev one will still work and is good as we will copy the block 
-    // we will initalize the blocks as per the need 
-    // and auto deletion of the block as needed , when the text content reaches 0 
-
-    intialize()
-    {
-        if(this.Childs.length === 0)
-        {
-            var newTextNode = new TextNode("x",0 ,"Type Something");
-            var newBlockNode = new BlockNode(this._id , "PH", 0 , [newTextNode] ,0)
-            this.Childs.push(newBlockNode);
-        }
-    }
 
 
     parseDocument()
@@ -176,7 +148,7 @@ class DocNode
 
     IsSuitable(type , styles , Node)
     {
-        if(Node.typ === type)
+        if(Node.IncludeTypes.includes(type) && type !== "SP")
         {
             return false ;  
         }
@@ -184,18 +156,23 @@ class DocNode
         return Node.styles.IsSuitable(styles)
     }
 
+    IsSuitableLayer(Array , Node)
+    {
+        for(let i = 0 ; i < Array.length ; i++)
+        {
+            if(Node.IncludeTypes.includes(Array[i]) && Array[i] !== "SP"){return false }
+        }
+        return true 
+    }
 
-    InsertInlineNode(type , styles , pos) // for multiple types , we will think about it 
+
+    InsertInlineNode(type , styles = {} , pos) // for multiple types , we will think about it 
     {
         var NodeRear = this.FindNodeAtPos_Deep(pos - 1);
         var NodeCurrent = this.FindNodeAtPos_Deep(pos);
 
 
-
-        // cases @Current (Node Current Exist but not the Node Rear)
-        // cases Bold@UnderLine (Node Current Exist and Node Rear but not equal)
-        // cases Bold@ (Node Current Does not exist but Node Rear Exist)
-        if((NodeRear && NodeCurrent) && (NodeRear._id !== NodeCurrent._id)) // for case like this Bold@UnderLine
+        if((NodeRear && NodeCurrent) && (NodeRear._id !== NodeCurrent._id)) 
         {
             console.log("running for the case 1")
             var ParentLevel_Rear = NodeRear.level - 1; 
@@ -220,7 +197,7 @@ class DocNode
         }
 
 
-        if(!NodeCurrent && NodeRear)
+        if(!NodeCurrent && NodeRear) 
         {
             console.log("running for the case 2")
             var ParentLevel_Rear = NodeRear.level - 1; 
@@ -262,7 +239,6 @@ class DocNode
                     break  
                 }
             }
-            // Cut open the layer suitablelayer + 1 
             var indexo = null ; 
             for(let i = NodeRear.level ; i > SuitableLevel ;i--)
             {
@@ -277,12 +253,279 @@ class DocNode
             var ET = new TextNode("a",0,"\u200B",pos)
             var Node = new InlineNode(SuitableParent._id , type , indexo  , [ET] ,pos ,styles);
             SuitableParent.Childs.splice(indexo , 0 ,Node);
+            this.resetPos()
             return ;
         }
 
-        // One case is left and that is @Bold , nodeRear does not exist , only valid for the first paragraph 
-        // we will look for this part in the future 
+        // One case remains , that is the pos0 insertion 
     }
+
+    ExtendTextNode(pos , content)
+    {
+        var TextNode = this.FindNodeAtPos_Deep(pos - 1);
+        if(TextNode._type !== 0)
+        {
+            throw new Error("This does Not Matches")
+        }
+        TextNode.ExtendContent(pos , content)
+    }
+
+
+    // we can manage the thing using caret pos  , doc pos 
+    // and for no width things we can have caret pos = doc pos -1 as doc pos still covers the zero width space 
+    // Then there is auto updation of zeroWidth space Etc 
+    SliceText(pos) // one time thing 
+    {
+        console.log("the slice Text is running for pos " , pos)
+        var TextNode = this.FindNodeAtPos_Deep(pos - 1);
+        if(TextNode && TextNode._type !== 0)
+        {
+            throw new Error("The type does not Matches")
+        }
+
+        if(TextNode._size === 1)
+        {
+            console.log("we have reached the threasold \n")
+            var lvl = TextNode.level ; 
+            var obj = TextNode.ExtractRoots();
+            var Count = TextNode.count ; 
+            for(let i = lvl - 1 ; i > -2 ; i--)
+            {
+                var Editable = this.Search_By_Id(obj[`${i}`]);
+                Editable.Childs.splice(Count,1);
+                if(Editable.Childs.length > 1) break 
+                Count = Editable.count ; 
+            }
+            this.resetPos()
+            return 
+        }
+
+        TextNode.sliceContent(pos)
+    }
+
+    // Now we are left with some things , such as Block Insertion , Layered Insertion  , Merging of the Nodes 
+    Cast(type,pos)
+    {
+        var Nodes = this.NodeBetween_Included(pos - 1 , pos );
+        if(pos < 1) {console.log("You are at very Beginning of the Doc so cast with precaution") ; return }
+        if(Nodes.length > 1)
+        {
+            Nodes[1].typ = type ;
+            Nodes[1].Element = Nodes[1].EvalElement() // cast the second one
+            Nodes[1]._id = Nodes[1].parent + "_" + type +  Nodes[1].count ; 
+
+        }
+        if(Nodes.length === 1)
+        {
+            Nodes[0].typ = type ; 
+            Nodes[0].Element = Nodes[0].EvalElement() 
+            Nodes[0]._id = Nodes[0].parent + "_" + type +  Nodes[0].count ; 
+        }
+
+        this.resetPos()
+    }
+
+
+    InsertInlineNode_Layered(types ,style = {} ,  pos )
+    {
+        if(!types.length){throw new Error("You cannot insert Node without a type ")}
+        if(types.length === 1){this.InsertInlineNode(types[0] , style , pos) ; return }
+
+        var NodeRear = this.FindNodeAtPos_Deep(pos - 1);
+        var NodeCurrent = this.FindNodeAtPos_Deep(pos);
+
+
+        if((NodeRear && NodeCurrent) && (NodeRear._id !== NodeCurrent._id)) 
+        {
+            console.log("running for the case 1")
+            var ParentLevel_Rear = NodeRear.level - 1; 
+            var Obj = NodeRear.ExtractRoots() ; 
+            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
+            for(let i = ParentLevel_Rear ; i > 0 ; i--)
+            {
+                var parent = this.Search_By_Id(Obj[`${i}`]);
+                var bool = this.IsSuitableLayer(types  , parent);
+                if(bool)
+                {
+                    SuitableParent = parent ;
+                    break  
+                }
+            }
+            var BehindNote = SuitableParent.NodeBetween_Included(pos - 1,pos)[0]
+            var indexo = BehindNote.count
+            if(types.includes(BehindNote.typ))
+            {
+             var index = types.indexOf(BehindNote.typ);
+             types.splice(0,0,BehindNote.typ);
+             types.splice(index + 1 , 1)
+            }
+
+
+            var ET = new TextNode("a",0,"\u200B",pos)  
+            var NodesArr = []
+            for(let i = types.length - 1 , j = 0 ; i > -1 ; i-- , j++)
+            {
+                if(j)
+                {
+                    NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [NodesArr[j - 1]] ,pos , {}))
+                    continue ;
+                }
+                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [ET] ,pos ,style))
+            }
+            var FinalNode = NodesArr[NodesArr.length - 1]
+            SuitableParent.Childs.splice(indexo + 1 , 0 ,FinalNode);
+            this.resetPos()
+            return ; 
+        }
+
+
+        if(!NodeCurrent && NodeRear) 
+        {
+            console.log("running for the case 2")
+            var ParentLevel_Rear = NodeRear.level - 1; 
+            var Obj = NodeRear.ExtractRoots() ; 
+            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
+            for(let i = ParentLevel_Rear ; i > 0 ; i--)
+            {
+                var parent = this.Search_By_Id(Obj[`${i}`]);
+                var bool = this.IsSuitableLayer(types  , parent);
+                if(bool)
+                {
+                    SuitableParent = parent ;
+                    break  
+                }
+            }
+            var BehindNote = SuitableParent.NodeBetween_Included(pos - 1,pos)[0]
+            var indexo = BehindNote.count
+            if(types.includes(BehindNote.typ))
+            {
+             var index = types.indexOf(BehindNote.typ);
+             types.splice(0,0,BehindNote.typ);
+             types.splice(index + 1 , 1)
+            }
+
+
+            var ET = new TextNode("a",0,"\u200B",pos)  
+            var NodesArr = []
+            for(let i = types.length - 1 , j = 0 ; i > -1 ; i-- , j++)
+            {
+                if(j)
+                {
+                    NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [NodesArr[j - 1]] ,pos , {}))
+                    continue ;
+                }
+                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [ET] ,pos ,style))
+            }
+            var FinalNode = NodesArr[NodesArr.length - 1]
+            SuitableParent.Childs.splice(indexo + 1 , 0 ,FinalNode);
+            this.resetPos()
+            return ;   
+        }
+
+
+        if(NodeCurrent && NodeRear && (NodeRear._id === NodeCurrent._id))
+        {
+            console.log("running for the case 3")
+            var ParentLevel_Rear = NodeRear.level - 1; 
+            var SuitableLevel  = 0 ; 
+            var Obj = NodeRear.ExtractRoots() ; 
+            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
+            for(let i = ParentLevel_Rear ; i > 0 ; i--)
+            {
+                var parent = this.Search_By_Id(Obj[`${i}`]);
+                var bool = this.IsSuitableLayer(types  , parent);
+                if(bool)
+                {
+                    SuitableLevel = i ; SuitableParent = parent ;
+                    break  
+                }
+            }
+            var indexo = null ; 
+            var BehindNote ;
+            for(let i = NodeRear.level ; i > SuitableLevel ;i--)
+            {
+                var CuttingNode = this.Search_By_Id(Obj[`${i}`]);
+                var Peice = CuttingNode.Cut_Pos(pos)
+                this.Search_By_Id(Obj[`${i - 1}`]).InsertCut(Peice)
+                if(i === SuitableLevel + 1)
+                {
+                    indexo = CuttingNode.count + 1;
+                    BehindNote = CuttingNode
+                }
+            }
+            if(types.includes(BehindNote.typ))
+            {
+             var index = types.indexOf(BehindNote.typ);
+             types.splice(0,0,BehindNote.typ);
+             types.splice(index + 1 , 1)
+            }
+
+
+            var ET = new TextNode("a",0,"\u200B",pos)  
+            var NodesArr = []
+            for(let i = types.length - 1 , j = 0 ; i > -1 ; i-- , j++)
+            {
+                if(j)
+                {
+                    NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [NodesArr[j - 1]] ,pos , {}))
+                    continue ;
+                }
+                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [ET] ,pos ,style))
+            }
+            var FinalNode = NodesArr[NodesArr.length - 1]
+            SuitableParent.Childs.splice(indexo , 0 ,FinalNode);
+            this.resetPos()
+            return ; 
+        }
+
+    }
+
+
+    // We will also have to cast back some things like selected h1 for new line , pressed enter without inserting 
+    // and manage the things such as remove the "\u200B"
+
+    insertBlockNode(type , pos) // now horizontal rule 
+    {
+        if(pos === 0){throw new Error("You cannot insert a block a position 0 , we have plans in future for this ")}
+        var Nodes = this.NodeBetween_Included(pos - 1, pos);
+        var NodeCount = Nodes.length ; 
+        if(NodeCount)
+        {
+            var TS  = new TextNode("TX",0 ,"\u200B" , pos) ; 
+            var Node = new BlockNode(this._id , type , Nodes[0].count + 1 , [TS] ,pos);
+            if(NodeCount > 1 || (NodeCount === 1 && Nodes[0].EvalProps().End_abs + 1 === pos)) // we are at breakPoint
+            {
+                this.Childs.splice(Nodes[0].count + 1 , 0 , Node); // directInsertion
+            }
+
+            if(NodeCount === 1 && Nodes[0].EvalProps().End_abs + 1 !== pos)
+            {
+                    var NodeRear = this.FindNodeAtPos_Deep(pos);
+                    var Obj = NodeRear.ExtractRoots();
+                    var indexo = 0 ; 
+                    for(let i = NodeRear.level ; i > -1 ;i--)
+                    {
+                        var CuttingNode = this.Search_By_Id(Obj[`${i}`]);
+                        var Peice = CuttingNode.Cut_Pos(pos)
+                        this.Search_By_Id(Obj[`${i - 1}`]).InsertCut(Peice)
+                        if(i === 0)
+                        {
+                            console.log("the cutting node is having id" , CuttingNode._id , CuttingNode.count + 1)
+                            indexo = CuttingNode.count + 1;
+                        }
+                    }
+
+                    this.Childs.splice(indexo , 0 , Node)
+            }
+
+            this.resetPos()
+        }
+        else
+        {
+            throw new Error("No nodes were found in this document")
+        }
+    }
+
 }
 
 
@@ -290,11 +533,11 @@ class DocNode
 
 
 
-class BlockNode  // can contain textNode and inlineNode
+class BlockNode  
 {
     constructor(
        parentId,
-       type , // h1 to h6 , pr 
+       type ,  
        count  ,
        childArr ,
        From_abs  , 
@@ -308,8 +551,8 @@ class BlockNode  // can contain textNode and inlineNode
         this._id = this.parent + "_" + this.typ +  this.count ; 
         this.Childs = childArr ; 
         this.From_abs = From_abs; 
-        this.level = 0 ; // fixed , Cannot change 
-        this._type = 2 ; // fixed , Cannot change
+        this.level = 0 ; 
+        this._type = 2 ; 
         this.Element = this.EvalElement() ; 
     }
 
@@ -337,6 +580,9 @@ class BlockNode  // can contain textNode and inlineNode
 
             case "H6":
             return "h6"
+
+            case "HR" :
+            return "hr"
 
             default :
             return "p"
@@ -382,8 +628,9 @@ class BlockNode  // can contain textNode and inlineNode
     NodeBetween_Included(from , to )
     {
         let finalArr = [] ;
-        if(this.Childs.length === 0) return []  
-        if(to > this.EvalProps().End_abs){to = this.EvalProps().End_abs}
+        if(this.Childs.length === 0) return [] 
+        if(to > this.EvalProps().End_abs || to === -1){to = this.EvalProps().End_abs}
+        if(from > this.EvalProps().End_abs){return []}
         for(let i = 0 , pos = this.Childs[0].EvalProps().From_abs ; pos <= to ; i++)
         {
             if (i === this.Childs.length) break ;
@@ -462,7 +709,6 @@ class BlockNode  // can contain textNode and inlineNode
     InsertCut(object)
     {
         this.Childs.splice(object.index , 0 ,object.Node);
-        return {insertedAt : object.index , insertedInto : this}
     }
 
     Cut_Pos(pos)
@@ -475,7 +721,7 @@ class BlockNode  // can contain textNode and inlineNode
             includedNodes.push(this.Childs[i])
         }
         this.Childs = includedNodes ;
-        return {Node : new InlineNode(this.parent ,this.typ , this.count + 1, ExcludedNodes , pos ) , index : this.count + 1}
+        return {Node : new BlockNode(this.parent ,this.typ , this.count + 1, ExcludedNodes , pos ) , index : this.count + 1}
     }
 
 
@@ -515,11 +761,11 @@ class BlockNode  // can contain textNode and inlineNode
 
 
 
-class InlineNode // can contain textNode and inlineNode 
+class InlineNode  
 {
     constructor(
         parentId ,
-        type  , // SP for span , EM , UL , ST , // LN for link  we will think about the link later 
+        type  ,  
         count ,
         childArr ,
         From_abs = 0  , 
@@ -530,13 +776,16 @@ class InlineNode // can contain textNode and inlineNode
         this.parent = parentId ; 
         this.count = count ; 
         this.typ = type ; 
-        this._id = this.parent + "_" + this.typ + this.count ; // count also includes the ownContent 
-        this.Childs = childArr ; // made up of textNode and InlineNode , in order 
+        this._id = this.parent + "_" + this.typ + this.count ;  
+        this.Childs = childArr ;  
         this.From_abs = From_abs ;
         this.level = ((this._id.split("_")).length - 2)
         this._type = 1 ;
         this.styles = new Style(styles) ;  
         this.Element = this.EvalElement();
+        this.IncludeTypes = [this.typ];
+        this.InheritedTypes = []
+        this.updateInheritedStyles()
     }
 
     EvalElement()
@@ -552,9 +801,41 @@ class InlineNode // can contain textNode and inlineNode
             case "ST":
             return "strong"
 
+            case "UL":
+            return "u"
+
             default :
             return "span"
         }
+    }
+
+    updateInheritedStyles()
+    {
+        var Arr = [];
+        for (let i = 0 ; i < this.IncludeTypes.length ; i++)
+        {
+            if(this.IncludeTypes[i] !== this.typ) Arr.push(this.IncludeTypes[i])
+        }
+    this.InheritedTypes = Arr ; 
+    }
+    updateIncludedTypes(Array)
+    {
+        for(let i = 0 , j = Array.length - 1 ; i<=j ; i++ , j--)
+        {
+
+            if(!this.IncludeTypes.includes(Array[i]))
+            {
+                this.IncludeTypes.push(Array[i])
+                if(i === j) break 
+            }
+
+            if(!this.IncludeTypes.includes(Array[j]))
+            {
+                this.IncludeTypes.push(Array[j])
+            }
+        }
+
+        this.updateInheritedStyles()
     }
     EvalProps()
     {
@@ -596,7 +877,7 @@ class InlineNode // can contain textNode and inlineNode
 
     resetPos ()
     {
-        this._id = this.parent + "_" + this.typ + this.count ; // count also includes the ownContent 
+        this._id = this.parent + "_" + this.typ + this.count ; 
         this.level = ((this._id.split("_")).length - 2)
         if(!this.Childs){return}
         this.Childs.forEach((node,index) => 
@@ -617,6 +898,7 @@ class InlineNode // can contain textNode and inlineNode
             if(node._type)
             {
                 node.styles.updateStyles(this.styles.CompleteStyle)
+                node.updateIncludedTypes(this.IncludeTypes)
             }
         })
     }
@@ -627,6 +909,7 @@ class InlineNode // can contain textNode and inlineNode
         let finalArr = [] ; 
         if(this.Childs.length === 0) return [] 
         if(to > this.EvalProps().End_abs || to === -1){to = this.EvalProps().End_abs}
+        if(from > this.EvalProps().End_abs){return []}
         for(let i = 0 , pos = this.Childs[0].EvalProps().From_abs ; pos <= to ; i++)
         {
             if (i === this.Childs.length) break ;
@@ -669,8 +952,6 @@ class InlineNode // can contain textNode and inlineNode
     }
 
 
-
-
     /**@internal */ // insert Text Indexed New
     I_T_I_N(index = this.Childs.length ,content )
     {
@@ -678,7 +959,6 @@ class InlineNode // can contain textNode and inlineNode
         var node = new TextNode(this._id , index , content , 0 )
         this.Childs.splice(index , 0 , node);
     }
-
 
 
     InsertCut(object)
@@ -736,7 +1016,7 @@ class InlineNode // can contain textNode and inlineNode
 
 
 
-class TextNode // cannot contain anything  , all the content is basically the textNode what you see 
+class TextNode  
 {
     constructor(
         parentId  , 
@@ -750,7 +1030,7 @@ class TextNode // cannot contain anything  , all the content is basically the te
         this.count = count ; 
         this.typ = "TX"
         this._id = this.parent + "_" + this.typ + this.count ; 
-        this.content = content || "\u200B" ; // will be string  
+        this.content = content || "\u200B" ;   
         this.From_abs = From_abs 
         this.level = ((this._id.split("_")).length - 2)
         this._size = this.content.length ; 
@@ -787,7 +1067,7 @@ class TextNode // cannot contain anything  , all the content is basically the te
         }
     }
 
-    printTree(){/* reached the end */}
+    printTree(){}
 
 
     parseNode()
@@ -826,6 +1106,32 @@ class TextNode // cannot contain anything  , all the content is basically the te
 
         return {Node : new TextNode(this.parent ,this.count + 1 ,CuttedContent,this.End_abs + 1) , index : this.count + 1} 
     }
+
+    ExtendContent(pos , content)
+    {
+        
+        var offSet = pos - this.From_abs;
+        var initText = this.content.slice(0,offSet);
+        var EndText = this.content.slice(offSet);
+
+        this.content = initText + content + EndText ;
+        this._size = this.content.length ; 
+        this.End_abs = this.From_abs + this._size - 1 ; 
+    }
+
+    sliceContent(pos)
+    {
+        var offSet = pos - this.From_abs;
+        var initText = this.content.slice(0,offSet);
+        var EndText = this.content.slice(offSet + 1);
+        
+        this.content = initText + EndText ;
+        this._size = this.content.length ; 
+        this.End_abs = this.From_abs + this._size - 1 ; 
+    }
+
+
+
 }
 
 
@@ -836,7 +1142,7 @@ const FindSize = (arr) => {
     const stack = [...arr];
 
     while (stack.length) {
-        const node = stack.pop(); // will give last elem and removes it 
+        const node = stack.pop();  
 
         if (node._type === 0) {
             total += node._size || 0;
@@ -851,7 +1157,7 @@ const FindSize = (arr) => {
 
 
 
-const Find_Node_Deep = (arr , pos) => // for node at deepest level 
+const Find_Node_Deep = (arr , pos) =>  
 {   
     for(let i = 0 ; i < arr.length ; i++)
     {
