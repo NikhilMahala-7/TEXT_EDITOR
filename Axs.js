@@ -87,9 +87,7 @@ export class Style
 
 
 
-// work of the state is same , insert thing as you desire 
-// and do the things that you do not like 
-// now we will have to introduce the keymaps but before let's do some other things 
+
 
 export class TxtEditor 
 {
@@ -98,15 +96,5 @@ export class TxtEditor
         this.Document = Document ; 
         this.CaretPos = Document.CaretPos ; 
     }
-    /**        parentId ,
-        type  , // SP for span , EM , UL , ST , // LN for link  we will think about the link later 
-        count ,
-        childArr ,
-        From_abs = 0  , 
-        styles = {}, */
-
-    InsertInlineNode(type , childArr , styles , pos)
-    {
-
-    } 
+    
 }
