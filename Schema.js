@@ -130,7 +130,22 @@ class DocNode
         })
     }
 
+    ExtractStyleMap(pos)
+    {
+        const Node = this.FindNodeAtPos_Deep(pos);
+        if(Node._type) {throw new Error("It is not Text Node")}
+        const Obj = Node.ExtractRoots() ; 
+        const Level = Node.level ; 
+        var Ts = new TextNode("TX",0,"\u200B",0)
+        var NodesArr = [Ts]
+        for(let i = Level - 1 , j = 1 ; i > 0 ; i-- , j++)
+        {
+            NodesArr.push(this.Search_By_Id(Obj[`${i}`]).copyNode_shallow([NodesArr[j - 1]]))
+        }
 
+        
+        return NodesArr[NodesArr.length - 1]
+    }
 
     parseDocument()
     {
@@ -491,7 +506,7 @@ class DocNode
         var NodeCount = Nodes.length ; 
         if(NodeCount)
         {
-            var TS  = new TextNode("TX",0 ,"\u200B" , pos) ; 
+            var TS  = this.ExtractStyleMap(pos - 1) ; 
             var Node = new BlockNode(this._id , type , Nodes[0].count + 1 , [TS] ,pos);
             if(NodeCount > 1 || (NodeCount === 1 && Nodes[0].EvalProps().End_abs + 1 === pos)) // we are at breakPoint
             {
@@ -523,6 +538,43 @@ class DocNode
         else
         {
             throw new Error("No nodes were found in this document")
+        }
+    }
+
+
+    // Let's leave the alogrithm for now and focus on how to insert the textNode at level 1 
+    insertTextNode_1(pos , content = "\u200B")
+    {
+        var NodeBehind = this.FindNodeAtPos_Deep(pos);
+        var Level = NodeBehind.level ; 
+        if(Level > 1)
+        {
+            var Obj = NodeBehind.ExtractRoots() ;  
+            var TopNode = this.Search_By_Id(Obj["1"])
+            var ParentNode = this.Search_By_Id(Obj["0"])
+            var TN = new TextNode("TN",TopNode.count + 1 , content , pos)
+            if(pos === TopNode.EvalProps().End_abs + 1)
+            {
+                ParentNode.Childs.slice(TopNode.count + 1, 0  ,TN)
+                this.resetPos() ; 
+                return 
+            }
+
+            for(let i = Level ; i > 0 ; i--)
+            {
+                var CuttingNode = this.Search_By_Id(Obj[`${i}`]);
+                var Peice = CuttingNode.Cut_Pos(pos)
+                this.Search_By_Id(Obj[`${i - 1}`]).InsertCut(Peice)
+            }
+            
+            ParentNode.Childs.splice(TopNode.count + 1, 0  ,TN)
+            this.resetPos()
+
+        }
+        if(Level === 1)
+        {
+            console.log("Extending the Node")
+            this.ExtendTextNode(pos,content)   
         }
     }
 
@@ -781,6 +833,7 @@ class InlineNode
         this.From_abs = From_abs ;
         this.level = ((this._id.split("_")).length - 2)
         this._type = 1 ;
+        this.stl = styles ;
         this.styles = new Style(styles) ;  
         this.Element = this.EvalElement();
         this.IncludeTypes = [this.typ];
@@ -816,7 +869,7 @@ class InlineNode
         {
             if(this.IncludeTypes[i] !== this.typ) Arr.push(this.IncludeTypes[i])
         }
-    this.InheritedTypes = Arr ; 
+        this.InheritedTypes = Arr ; 
     }
     updateIncludedTypes(Array)
     {
@@ -1006,6 +1059,10 @@ class InlineNode
     }
 
 
+    copyNode_shallow(arr = [])
+    {
+          return  new InlineNode(this._id , this.typ , 0 ,arr ,0 ,this.stl)
+    }
 }
 
 
@@ -1022,7 +1079,7 @@ class TextNode
         parentId  , 
         count , 
         content ="\u200B", 
-        From_abs = 0  ,  
+        From_abs = 0  ,
     )
 
     {
@@ -1115,6 +1172,13 @@ class TextNode
         var EndText = this.content.slice(offSet);
 
         this.content = initText + content + EndText ;
+        var index = this.content.indexOf("\u200B");
+        if(index > -1 && index < this.content.length)
+        {
+            var I = this.content.slice(0,index);
+            var E = this.content.slice(index + 1);
+            this.content = I + E;
+        }
         this._size = this.content.length ; 
         this.End_abs = this.From_abs + this._size - 1 ; 
     }
