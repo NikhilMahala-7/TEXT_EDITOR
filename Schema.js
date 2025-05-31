@@ -76,7 +76,8 @@ class DocNode
         return finalArr ; 
     }
 
-    resetPos ()
+    // Doc Node -> BlockNode's Reset -> ResetFxn 
+    resetPos () 
     {
         this.forEach((node,index) => 
         {
@@ -147,6 +148,30 @@ class DocNode
         return NodesArr[NodesArr.length - 1]
     }
 
+
+    ExtractStyles(pos)
+    {
+        var Node = this.FindNodeAtPos_Deep(pos);
+        var NodeLevel = Node.level ; 
+        var Styles = {
+            "BlockasParent" : false ,
+            "CompleteStyles" : {},
+            "IncludedTypes" : [] 
+        }
+        if(NodeLevel > 1)
+        {
+            var ParentNode = this.Search_By_Id(Node.ExtractRoots()[`${NodeLevel - 1}`])
+            Styles["CompleteStyles"] = ParentNode.styles.CompleteStyle ;
+            Styles["IncludedTypes"] = ParentNode.IncludeTypes ; 
+            return Styles 
+        }
+        if(NodeLevel === 1)
+        {
+            Styles["BlockasParent"] = true
+            return Styles
+        }
+    }
+
     parseDocument()
     {
         var string = "";
@@ -160,156 +185,111 @@ class DocNode
     }
 
 
-
-    IsSuitable(type , styles , Node)
+    IsCorrectLayer(Array , Node , styles)
     {
-        if(Node.IncludeTypes.includes(type) && type !== "SP")
+        var NodeArray = Node.IncludeTypes;
+        var _ArrhasSpan = Array.includes("SP");
+        if(_ArrhasSpan)
         {
-            return false ;  
+            Array.splice(Array.indexOf("SP"),1);
+            Array.push("SP");
         }
 
-        return Node.styles.IsSuitable(styles)
+        if(NodeArray.length > Array.length)
+        {
+            return {bool : false , arr : Array , _hasSpan : _ArrhasSpan , _hasHope : true  , _styles : styles }
+        }
+
+
+        if(NodeArray.includes("SP"))
+        {
+            var boolObj = Node.styles.IsSuitable(styles);
+            var newStyles = boolObj.NotMatched ; 
+            var includeSpan = Object.keys(newStyles).length
+            if(boolObj._bool)
+            {
+                    var NewArray = [] ; // span will be not be pushed  based on conditions
+                    for(let i = 0 ; i < Array.length ; i++)
+                    {
+                        if(!NodeArray.includes(Array[i])){NewArray.push(Array[i])}
+                    }
+                    var isFalse = false ; 
+                    for(let i = 0 ; i < NodeArray.length ; i++){if(!Array.includes(NodeArray[i])){isFalse = true}}
+                    if(NewArray.length === Array.length || isFalse)
+                    {return {bool : false , arr : Array , _hasSpan : _ArrhasSpan , _hasHope : true ,_styles : styles  }}
+                    if(includeSpan)
+                    {
+                        NewArray.push("SP")
+                    }
+                    return {bool : true , arr : NewArray , _hasSpan : includeSpan , _hasHope : true , _styles : newStyles }
+            }
+            else
+            {
+                return {bool : false , arr : Array , _hasSpan : _ArrhasSpan , _hasHope : true , _styles : styles}
+            }
+        }else
+        {
+        
+            var NewArray = [] ; // span will be pushed based on conditions
+            for(let i = 0 ; i < Array.length ; i++)
+            {
+                if(!NodeArray.includes(Array[i])){NewArray.push(Array[i])}
+            }
+            var isFalse = false ; 
+            for(let i = 0 ; i < NodeArray.length ; i++){if(!Array.includes(NodeArray[i])){isFalse = true}}
+            if(NewArray.length === Array.length || isFalse)
+            {return {bool : false , arr : Array , _hasSpan : _ArrhasSpan , _hasHope : true ,_styles : styles  }}
+
+            return {bool : true , arr : NewArray , _hasSpan : _ArrhasSpan , _hasHope : true , _styles : styles }
+        
+        } 
+
     }
 
-    IsSuitableLayer(Array , Node)
-    {
-        for(let i = 0 ; i < Array.length ; i++)
-        {
-            if(Node.IncludeTypes.includes(Array[i]) && Array[i] !== "SP"){return false }
-        }
-        return true 
-    }
 
 
-    InsertInlineNode(type , styles = {} , pos) // for multiple types , we will think about it 
-    {
-        var NodeRear = this.FindNodeAtPos_Deep(pos - 1);
-        var NodeCurrent = this.FindNodeAtPos_Deep(pos);
-
-
-        if((NodeRear && NodeCurrent) && (NodeRear._id !== NodeCurrent._id)) 
-        {
-            console.log("running for the case 1")
-            var ParentLevel_Rear = NodeRear.level - 1; 
-            var Obj = NodeRear.ExtractRoots() ; 
-            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
-            for(let i = ParentLevel_Rear ; i > 0 ; i--)
-            {
-                var parent = this.Search_By_Id(Obj[`${i}`]);
-                var bool = this.IsSuitable(type , styles , parent);
-                if(bool)
-                {
-                    SuitableParent = parent ;
-                    break  
-                }
-            }
-            var indexo = SuitableParent.NodeBetween_Included(pos - 1,pos)[0].count
-            var ET = new TextNode("a",0,"\u200B",pos)
-            var Node = new InlineNode(SuitableParent._id , type , indexo + 1 , [ET] ,pos ,styles);
-            SuitableParent.Childs.splice(indexo + 1 , 0 ,Node);
-            this.resetPos()
-            return ; 
-        }
-
-
-        if(!NodeCurrent && NodeRear) 
-        {
-            console.log("running for the case 2")
-            var ParentLevel_Rear = NodeRear.level - 1; 
-            var Obj = NodeRear.ExtractRoots() ; 
-            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
-            for(let i = ParentLevel_Rear ; i > 0 ; i--)
-            {
-                var parent = this.Search_By_Id(Obj[`${i}`]);
-                var bool = this.IsSuitable(type , styles , parent);
-                if(bool)
-                {
-                    SuitableParent = parent ;
-                    break  
-                }
-            }
-            var indexo = SuitableParent.NodeBetween_Included(pos - 1,pos)[0].count
-            var ET = new TextNode("a",0,"\u200B",pos)
-            var Node = new InlineNode(SuitableParent._id , type , indexo + 1 , [ET] ,pos ,styles);
-            SuitableParent.Childs.splice(indexo + 1 , 0 ,Node);
-            this.resetPos()
-            return ;   
-        }
-
-
-        if(NodeCurrent && NodeRear && (NodeRear._id === NodeCurrent._id))
-        {
-            console.log("running for the case 3")
-            var ParentLevel_Rear = NodeRear.level - 1; 
-            var SuitableLevel  = 0 ; 
-            var Obj = NodeRear.ExtractRoots() ; 
-            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
-            for(let i = ParentLevel_Rear ; i > 0 ; i--)
-            {
-                var parent = this.Search_By_Id(Obj[`${i}`]);
-                var bool = this.IsSuitable(type , styles , parent);
-                if(bool)
-                {
-                    SuitableLevel = i ; SuitableParent = parent ;
-                    break  
-                }
-            }
-            var indexo = null ; 
-            for(let i = NodeRear.level ; i > SuitableLevel ;i--)
-            {
-                var CuttingNode = this.Search_By_Id(Obj[`${i}`]);
-                var Peice = CuttingNode.Cut_Pos(pos)
-                this.Search_By_Id(Obj[`${i - 1}`]).InsertCut(Peice)
-                if(i === SuitableLevel + 1)
-                {
-                    indexo = CuttingNode.count + 1;
-                }
-            }
-            var ET = new TextNode("a",0,"\u200B",pos)
-            var Node = new InlineNode(SuitableParent._id , type , indexo  , [ET] ,pos ,styles);
-            SuitableParent.Childs.splice(indexo , 0 ,Node);
-            this.resetPos()
-            return ;
-        }
-
-        // One case remains , that is the pos0 insertion 
-    }
 
     ExtendTextNode(pos , content)
     {
         var TextNode = this.FindNodeAtPos_Deep(pos - 1);
+        var _hasU = false ; 
+        if(TextNode.content.includes("\u200B")){_hasU = true}
         if(TextNode._type !== 0)
         {
             throw new Error("This does Not Matches")
         }
         TextNode.ExtendContent(pos , content)
+        return _hasU
     }
 
 
-    // we can manage the thing using caret pos  , doc pos 
-    // and for no width things we can have caret pos = doc pos -1 as doc pos still covers the zero width space 
-    // Then there is auto updation of zeroWidth space Etc 
+ 
     SliceText(pos) // one time thing 
     {
-        console.log("the slice Text is running for pos " , pos)
         var TextNode = this.FindNodeAtPos_Deep(pos - 1);
         if(TextNode && TextNode._type !== 0)
         {
             throw new Error("The type does not Matches")
         }
 
-        if(TextNode._size === 1)
+        if(TextNode._size === 1) // we will see the mergin just in a bit 
         {
-            console.log("we have reached the threasold \n")
             var lvl = TextNode.level ; 
             var obj = TextNode.ExtractRoots();
+            var PNode = this.Search_By_Id(obj["0"])
+            var C1 = PNode.EvalProps().From_abs === pos - 1; 
             var Count = TextNode.count ; 
             for(let i = lvl - 1 ; i > -2 ; i--)
             {
                 var Editable = this.Search_By_Id(obj[`${i}`]);
                 Editable.Childs.splice(Count,1);
-                if(Editable.Childs.length > 1) break 
+                if(Editable.Childs.length > 0) break 
                 Count = Editable.count ; 
+            }
+            if(C1 && PNode.Childs.length && PNode.count > 0 )
+            {
+                this.Childs[PNode.count - 1].Childs = this.Childs[PNode.count - 1].Childs.concat(PNode.Childs);
+                this.Childs.splice(PNode.count)
             }
             this.resetPos()
             return 
@@ -344,48 +324,51 @@ class DocNode
     InsertInlineNode_Layered(types ,style = {} ,  pos )
     {
         if(!types.length){throw new Error("You cannot insert Node without a type ")}
-        if(types.length === 1){this.InsertInlineNode(types[0] , style , pos) ; return }
-
         var NodeRear = this.FindNodeAtPos_Deep(pos - 1);
         var NodeCurrent = this.FindNodeAtPos_Deep(pos);
-
+        var hasSP = types.includes("SP");
 
         if((NodeRear && NodeCurrent) && (NodeRear._id !== NodeCurrent._id)) 
         {
             console.log("running for the case 1")
             var ParentLevel_Rear = NodeRear.level - 1; 
             var Obj = NodeRear.ExtractRoots() ; 
-            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
+            var SuitableParent = this.Search_By_Id(Obj["0"]) ;
+            var SuitableLevel  = 0 ; 
+            var FormedArr = types ;  
+            var FormedStyle = style;
             for(let i = ParentLevel_Rear ; i > 0 ; i--)
             {
                 var parent = this.Search_By_Id(Obj[`${i}`]);
-                var bool = this.IsSuitableLayer(types  , parent);
-                if(bool)
+                var ulid = this.IsCorrectLayer(types  , parent , style);
+                if(ulid.bool)
                 {
-                    SuitableParent = parent ;
+                    SuitableLevel = i ; SuitableParent = parent ;
+                    FormedArr = ulid.arr;
+                    FormedStyle = ulid._styles;
+                    hasSP = ulid._hasSpan
                     break  
                 }
             }
-            var BehindNote = SuitableParent.NodeBetween_Included(pos - 1,pos)[0]
-            var indexo = BehindNote.count
-            if(types.includes(BehindNote.typ))
+
+            var ET = new TextNode("a",0,"\u200B",pos)  ;
+            var indexo = SuitableParent.NodeBetween_Included(pos - 1,pos)[0].count
+            var lastInseredNode = ET ;
+            var endIdx = FormedArr.length 
+            var NodesArr = [] ; 
+            if(hasSP)
             {
-             var index = types.indexOf(BehindNote.typ);
-             types.splice(0,0,BehindNote.typ);
-             types.splice(index + 1 , 1)
+                lastInseredNode = new InlineNode("a","SP",0,[ET],0,FormedStyle)
+                endIdx = FormedArr.length - 1; 
             }
-
-
-            var ET = new TextNode("a",0,"\u200B",pos)  
-            var NodesArr = []
-            for(let i = types.length - 1 , j = 0 ; i > -1 ; i-- , j++)
+            for(let i = 0 ; i < endIdx ; i++)
             {
-                if(j)
+                if(i)
                 {
-                    NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [NodesArr[j - 1]] ,pos , {}))
+                    NodesArr.push(new InlineNode(SuitableParent._id , FormedArr[i] , 1 , [NodesArr[i - 1]] ,pos , {}))
                     continue ;
                 }
-                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [ET] ,pos ,style))
+                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , 1 , [lastInseredNode] ,pos ,{}))
             }
             var FinalNode = NodesArr[NodesArr.length - 1]
             SuitableParent.Childs.splice(indexo + 1 , 0 ,FinalNode);
@@ -399,42 +382,45 @@ class DocNode
             console.log("running for the case 2")
             var ParentLevel_Rear = NodeRear.level - 1; 
             var Obj = NodeRear.ExtractRoots() ; 
-            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
+            var SuitableParent = this.Search_By_Id(Obj["0"]) ;
+            var FormedArr = types ;  
+            var FormedStyle = style;
             for(let i = ParentLevel_Rear ; i > 0 ; i--)
             {
                 var parent = this.Search_By_Id(Obj[`${i}`]);
-                var bool = this.IsSuitableLayer(types  , parent);
-                if(bool)
+                var ulid = this.IsCorrectLayer(types  , parent , style);
+                if(ulid.bool)
                 {
-                    SuitableParent = parent ;
+                    SuitableLevel = i ; SuitableParent = parent ;
+                    FormedArr = ulid.arr;
+                    FormedStyle = ulid._styles;
+                    hasSP = ulid._hasSpan
                     break  
                 }
             }
-            var BehindNote = SuitableParent.NodeBetween_Included(pos - 1,pos)[0]
-            var indexo = BehindNote.count
-            if(types.includes(BehindNote.typ))
+            var indexo = SuitableParent.NodeBetween_Included(pos - 1,pos)[0].count
+            var ET = new TextNode("a",0,"\u200B",pos)  ;
+            var lastInseredNode = ET ;
+            var endIdx = FormedArr.length 
+            var NodesArr = [] ; 
+            if(hasSP)
             {
-             var index = types.indexOf(BehindNote.typ);
-             types.splice(0,0,BehindNote.typ);
-             types.splice(index + 1 , 1)
+                lastInseredNode = new InlineNode("a","SP",0,[ET],0,FormedStyle)
+                endIdx = FormedArr.length - 1; 
             }
-
-
-            var ET = new TextNode("a",0,"\u200B",pos)  
-            var NodesArr = []
-            for(let i = types.length - 1 , j = 0 ; i > -1 ; i-- , j++)
+            for(let i = 0 ; i < endIdx ; i++)
             {
-                if(j)
+                if(i)
                 {
-                    NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [NodesArr[j - 1]] ,pos , {}))
+                    NodesArr.push(new InlineNode(SuitableParent._id , FormedArr[i] , 1 , [NodesArr[i - 1]] ,pos , {}))
                     continue ;
                 }
-                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [ET] ,pos ,style))
+                NodesArr.push(new InlineNode(SuitableParent._id , FormedArr[i] , 1 , [lastInseredNode] ,pos ,{}))
             }
-            var FinalNode = NodesArr[NodesArr.length - 1]
+            var FinalNode = NodesArr[NodesArr.length - 1] || lastInseredNode ; 
             SuitableParent.Childs.splice(indexo + 1 , 0 ,FinalNode);
             this.resetPos()
-            return ;   
+            return ; 
         }
 
 
@@ -442,21 +428,26 @@ class DocNode
         {
             console.log("running for the case 3")
             var ParentLevel_Rear = NodeRear.level - 1; 
-            var SuitableLevel  = 0 ; 
             var Obj = NodeRear.ExtractRoots() ; 
-            var SuitableParent = this.Search_By_Id(Obj["0"]) ; 
+            var SuitableParent = this.Search_By_Id(Obj["0"]) ;
+            var SuitableLevel = 0 ;  
+            var FormedArr = types ;  
+            var FormedStyle = style;
             for(let i = ParentLevel_Rear ; i > 0 ; i--)
             {
                 var parent = this.Search_By_Id(Obj[`${i}`]);
-                var bool = this.IsSuitableLayer(types  , parent);
-                if(bool)
+                var ulid = this.IsCorrectLayer(types  , parent , style);
+                if(ulid.bool)
                 {
                     SuitableLevel = i ; SuitableParent = parent ;
+                    FormedArr = ulid.arr;
+                    FormedStyle = ulid._styles;
+                    hasSP = ulid._hasSpan
                     break  
                 }
             }
+
             var indexo = null ; 
-            var BehindNote ;
             for(let i = NodeRear.level ; i > SuitableLevel ;i--)
             {
                 var CuttingNode = this.Search_By_Id(Obj[`${i}`]);
@@ -465,27 +456,27 @@ class DocNode
                 if(i === SuitableLevel + 1)
                 {
                     indexo = CuttingNode.count + 1;
-                    BehindNote = CuttingNode
                 }
             }
-            if(types.includes(BehindNote.typ))
+
+
+            var ET = new TextNode("a",0,"\u200B",pos)  ;
+            var lastInseredNode = ET ;
+            var endIdx = FormedArr.length 
+            var NodesArr = [] ; 
+            if(hasSP)
             {
-             var index = types.indexOf(BehindNote.typ);
-             types.splice(0,0,BehindNote.typ);
-             types.splice(index + 1 , 1)
+                lastInseredNode = new InlineNode("a","SP",0,[ET],0,FormedStyle)
+                endIdx = FormedArr.length - 1; 
             }
-
-
-            var ET = new TextNode("a",0,"\u200B",pos)  
-            var NodesArr = []
-            for(let i = types.length - 1 , j = 0 ; i > -1 ; i-- , j++)
+            for(let i = 0 ; i < endIdx ; i++)
             {
-                if(j)
+                if(i)
                 {
-                    NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [NodesArr[j - 1]] ,pos , {}))
+                    NodesArr.push(new InlineNode(SuitableParent._id , FormedArr[i] , 1 , [NodesArr[i - 1]] ,pos , {}))
                     continue ;
                 }
-                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , indexo + 1 , [ET] ,pos ,style))
+                NodesArr.push(new InlineNode(SuitableParent._id , types[i] , 1 , [lastInseredNode] ,pos ,{}))
             }
             var FinalNode = NodesArr[NodesArr.length - 1]
             SuitableParent.Childs.splice(indexo , 0 ,FinalNode);
@@ -496,10 +487,9 @@ class DocNode
     }
 
 
-    // We will also have to cast back some things like selected h1 for new line , pressed enter without inserting 
-    // and manage the things such as remove the "\u200B"
 
-    insertBlockNode(type , pos) // now horizontal rule 
+
+    insertBlockNode(type , pos) 
     {
         if(pos === 0){throw new Error("You cannot insert a block a position 0 , we have plans in future for this ")}
         var Nodes = this.NodeBetween_Included(pos - 1, pos);
@@ -542,10 +532,9 @@ class DocNode
     }
 
 
-    // Let's leave the alogrithm for now and focus on how to insert the textNode at level 1 
-    insertTextNode_1(pos , content = "\u200B")
+    insertTextNode_1(pos , content)
     {
-        var NodeBehind = this.FindNodeAtPos_Deep(pos);
+        var NodeBehind = this.FindNodeAtPos_Deep(pos - 1);
         var Level = NodeBehind.level ; 
         if(Level > 1)
         {
@@ -555,7 +544,7 @@ class DocNode
             var TN = new TextNode("TN",TopNode.count + 1 , content , pos)
             if(pos === TopNode.EvalProps().End_abs + 1)
             {
-                ParentNode.Childs.slice(TopNode.count + 1, 0  ,TN)
+                ParentNode.Childs.splice(TopNode.count + 1, 0  ,TN)
                 this.resetPos() ; 
                 return 
             }
@@ -739,25 +728,6 @@ class BlockNode
 
 
 
-
-    /**@internal */
-    I_I_I_N(index = this.Childs.length ,type , arr = [] )
-    {
-        if(index === -1){index = this.Childs.length}
-        var node = new InlineNode(this._id , type , index , arr , 0)
-        this.Childs.splice(index , 0 , node);
-    }
-
-
-    /**@internal */
-    I_T_I_N(index = this.Childs.length ,content )
-    {
-        if(index === -1){index = this.Childs.length}
-        var node = new TextNode(this._id , index , content , 0 )
-        this.Childs.splice(index , 0 , node);
-        this.resetPos() ; 
-    }
-
     InsertCut(object)
     {
         this.Childs.splice(object.index , 0 ,object.Node);
@@ -797,7 +767,7 @@ class BlockNode
             string += node.parseNode()
         })
 
-        return `<${this.Element}>${string}</${this.Element}>`
+        return `<${this.Element} id="${this._id}">${string}</${this.Element}>`
     }
 
 
@@ -821,7 +791,7 @@ class InlineNode
         count ,
         childArr ,
         From_abs = 0  , 
-        styles = {},
+        styles = {}, // 
     )
     
     {
@@ -996,23 +966,6 @@ class InlineNode
 
 
 
-    /**@internal */
-    I_I_I_N(index = this.Childs.length ,type ,arr = [])
-    {
-        if(index === -1){index = this.Childs.length}
-        var node = new InlineNode(this._id , type , index ,  arr , 0)
-        this.Childs.splice(index , 0 , node);
-    }
-
-
-    /**@internal */ // insert Text Indexed New
-    I_T_I_N(index = this.Childs.length ,content )
-    {
-        if(index === -1){index = this.Childs.length}
-        var node = new TextNode(this._id , index , content , 0 )
-        this.Childs.splice(index , 0 , node);
-    }
-
 
     InsertCut(object)
     {
@@ -1053,22 +1006,17 @@ class InlineNode
         var sty = this.styles.Styles ; 
         if(sty !== "")
         {
-            return `<${this.Element} style="${sty}">${string}</${this.Element}>`
+            return `<${this.Element} style=" ${sty}" id="${this._id}">${string}</${this.Element}>`
         }
-        return `<${this.Element} >${string}</${this.Element}>`
+        return `<${this.Element} id="${this._id}" >${string}</${this.Element}>`
     }
 
 
     copyNode_shallow(arr = [])
     {
-          return  new InlineNode(this._id , this.typ , 0 ,arr ,0 ,this.stl)
+        return  new InlineNode(this._id , this.typ , 0 ,arr ,0 ,this.styles.CompleteStyle)
     }
 }
-
-
-
-
-
 
 
 
@@ -1172,7 +1120,7 @@ class TextNode
         var EndText = this.content.slice(offSet);
 
         this.content = initText + content + EndText ;
-        var index = this.content.indexOf("\u200B");
+        var index =  this.content.indexOf("\u200B");
         if(index > -1 && index < this.content.length)
         {
             var I = this.content.slice(0,index);
@@ -1186,8 +1134,8 @@ class TextNode
     sliceContent(pos)
     {
         var offSet = pos - this.From_abs;
-        var initText = this.content.slice(0,offSet);
-        var EndText = this.content.slice(offSet + 1);
+        var initText = this.content.slice(0,offSet - 1);
+        var EndText = this.content.slice(offSet);
         
         this.content = initText + EndText ;
         this._size = this.content.length ; 
@@ -1197,6 +1145,8 @@ class TextNode
 
 
 }
+
+
 
 
 
@@ -1237,5 +1187,8 @@ const Find_Node_Deep = (arr , pos) =>
     }
 }
 
+var TN = new TextNode("D_PH0",0,"Type Something",0)
+var Ph = new BlockNode("D","PH",0,[TN],0)
+var Doc = new DocNode([Ph],0,"D")
 
-export {DocNode , InlineNode , BlockNode , TextNode} ; 
+export {DocNode , InlineNode , BlockNode , TextNode , Doc} ; 
