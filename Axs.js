@@ -1,4 +1,4 @@
-import { DocNode , BlockNode , TextNode , InlineNode } from "./Schema.js";
+
 export class Style 
 {
     constructor(marks , marksInherited = {} ) // attribute will be an array of attribute of arrays // marks will be an object or value  
@@ -70,16 +70,18 @@ export class Style
     IsSuitable(object)
     {
         var NoMatchCount = 0 ; 
-        for(key in object)
+        var NotMatched = {} ; 
+        for(let key in object)
         {
             if(object[key] && this.CompleteStyle[key] && (this.CompleteStyle[key] !== object[key]))
             {
-                NoMatchCount++
+                NoMatchCount++;
+                NotMatched[key] = object[key];
             }
         }
 
-        if(NoMatchCount > 2) {return false }
-        return true 
+        if(NoMatchCount > 2) {return {_bool : false } }
+        return {_bool : true , newStyles : NotMatched} 
     }
 
 }
@@ -89,12 +91,3 @@ export class Style
 
 
 
-export class TxtEditor 
-{
-    constructor(Document)
-    {
-        this.Document = Document ; 
-        this.CaretPos = Document.CaretPos ; 
-    }
-    
-}
