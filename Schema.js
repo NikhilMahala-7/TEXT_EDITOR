@@ -204,10 +204,12 @@ class DocNode
         if(NodeArray.includes("SP"))
         {
             var boolObj = Node.styles.IsSuitable(styles);
-            var newStyles = boolObj.NotMatched ; 
-            var includeSpan = Object.keys(newStyles).length
+            var newStylesS = styles ;  
+            var includeSpan = true ; 
             if(boolObj._bool)
             {
+                    newStylesS = boolObj.newStyles ;
+                    includeSpan = Object.keys(newStylesS).length
                     var NewArray = [] ; // span will be not be pushed  based on conditions
                     for(let i = 0 ; i < Array.length ; i++)
                     {
@@ -221,7 +223,7 @@ class DocNode
                     {
                         NewArray.push("SP")
                     }
-                    return {bool : true , arr : NewArray , _hasSpan : includeSpan , _hasHope : true , _styles : newStyles }
+                    return {bool : true , arr : NewArray , _hasSpan : includeSpan , _hasHope : true , _styles : newStylesS }
             }
             else
             {
@@ -252,13 +254,20 @@ class DocNode
     ExtendTextNode(pos , content)
     {
         var TextNode = this.FindNodeAtPos_Deep(pos - 1);
-        var _hasU = false ; 
-        if(TextNode.content.includes("\u200B")){_hasU = true}
+        var _hasU = false ;
+        if(TextNode.content.includes("\u200B")){
+            _hasU = true ; 
+            var Parent = this.Search_By_Id(TextNode.ExtractRoots()["0"])//
+            if(TextNode.EvalProps().From_abs === Parent.EvalProps().From_abs)
+            {
+                _hasU = false ; 
+            }
+        } // we will have to find a way to preserve that 
         if(TextNode._type !== 0)
         {
             throw new Error("This does Not Matches")
         }
-        TextNode.ExtendContent(pos , content)
+        TextNode.ExtendContent(pos , content , _hasU )
         return _hasU
     }
 
@@ -298,7 +307,6 @@ class DocNode
         TextNode.sliceContent(pos)
     }
 
-    // Now we are left with some things , such as Block Insertion , Layered Insertion  , Merging of the Nodes 
     Cast(type,pos)
     {
         var Nodes = this.NodeBetween_Included(pos - 1 , pos );
@@ -1112,7 +1120,7 @@ class TextNode
         return {Node : new TextNode(this.parent ,this.count + 1 ,CuttedContent,this.End_abs + 1) , index : this.count + 1} 
     }
 
-    ExtendContent(pos , content)
+    ExtendContent(pos , content , condition)
     {
         
         var offSet = pos - this.From_abs;
@@ -1121,7 +1129,7 @@ class TextNode
 
         this.content = initText + content + EndText ;
         var index =  this.content.indexOf("\u200B");
-        if(index > -1 && index < this.content.length)
+        if(index > -1 && index < this.content.length && condition)
         {
             var I = this.content.slice(0,index);
             var E = this.content.slice(index + 1);
@@ -1192,3 +1200,4 @@ var Ph = new BlockNode("D","PH",0,[TN],0)
 var Doc = new DocNode([Ph],0,"D")
 
 export {DocNode , InlineNode , BlockNode , TextNode , Doc} ; 
+
